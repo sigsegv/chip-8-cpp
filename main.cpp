@@ -589,6 +589,8 @@ int main(int argc, char** argv)
         drawScreen();
     }
     std::cout << "done\n";
-    pTexture.release(); // todo fix SFML mem mgmt
+    pTexture.reset();
+    pSprite.reset();
+    pWindow.reset();
     return 0;
 }
