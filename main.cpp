@@ -86,31 +86,17 @@ void draw(std::uint8_t x, std::uint8_t y, std::uint8_t height)
     for (std::uint8_t row = 0; row < height; ++row)
     {
         std::uint8_t data = ram[addr + row];
-        if (x % 8 != 0)
-        {
-            throw std::runtime_error("unsupported drawing command");
-        }
-        //std::uint8_t ypos = y + row;
+        std::uint8_t remainder = x % 8;
+        std::uint8_t firstByteMask = 0xFF >> remainder;
+        std::uint8_t secondByteMask = -(0x100) >> remainder;
         std::uint16_t dbyte = ((y + row) * 8) + (x / 8);
         std::uint16_t dOffset = displayOffset + dbyte;
         if (dOffset > 0xFFF)
         {
             throw std::runtime_error("access violation in drawing command");
         }
-        ram[dOffset] ^= data;
-        //for (std::uint8_t dx = 0; dx < 4; ++dx)
-        //{
-        //    std::uint8_t t = 0x80 >> dx;
-        //    std::uint8_t xpos = x + dx;
-        //    //if (data & t)
-        //    //{
-        //        //sf::RectangleShape rect(sf::Vector2f(10.f, 10.f));
-        //        //rect.setFillColor(sf::Color::Green);
-        //        //rect.setPosition(xpos * 10, ypos * 10);
-        //        //pWindow->draw(rect);
-        //        
-        //    //}
-        //}
+        ram[dOffset] ^= (data >> remainder);
+        if(dOffset < 0xFFF) ram[dOffset + 1] ^= (data << (8 - remainder));
     }
 }
 
