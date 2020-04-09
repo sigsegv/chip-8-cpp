@@ -324,19 +324,19 @@ int main(int argc, char** argv)
             case 0x3:
             {
                 log("SE Vx, byte");
-                throw std::runtime_error("Not implemented");
+                if (registry[x] == nn) pc += 2;
             }
             break;
             case 0x4:
             {
                 log("SNE Vx, byte");
-                throw std::runtime_error("Not implemented");
+                if (registry[x] != nn) pc += 2;
             }
             break;
             case 0x5:
             {
                 log("SE Vx, Vy");
-                throw std::runtime_error("Not implemented");
+                if (registry[x] == registry[y]) pc += 2;
             }
             break;
             case 0x6:
@@ -348,7 +348,7 @@ int main(int argc, char** argv)
             case 0x7:
             {
                 log("ADD Vx, byte");
-                throw std::runtime_error("Not implemented");
+                registry[x] += nn;
             }
             break;
             case 0x8:
@@ -358,25 +358,25 @@ int main(int argc, char** argv)
                 case 0x0:
                 {
                     log("LD Vx, Vy");
-                    throw std::runtime_error("Not implemented");
+                    registry[x] = registry[y];
                 }
                 break;
                 case 0x1:
                 {
                     log("OR Vx, Vy");
-                    throw std::runtime_error("Not implemented");
+                    registry[x] |= registry[y];
                 }
                 break;
                 case 0x2:
                 {
                     log("AND Vx, Vy");
-                    throw std::runtime_error("Not implemented");
+                    registry[x] &= registry[y];
                 }
                 break;
                 case 0x3:
                 {
                     log("XOR Vx, Vy");
-                    throw std::runtime_error("Not implemented");
+                    registry[x] ^= registry[y];
                 }
                 break;
                 case 0x4:
