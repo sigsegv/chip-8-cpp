@@ -100,7 +100,7 @@ void draw(std::uint8_t x, std::uint8_t y, std::uint8_t height)
     }
 }
 
-// block till key pressed and return the value 0-15 "0-F". or 0xFF on error
+// get Chip8 key from key event and return as a value 0-15 "0-F". or 0xFF on invalid key
 std::uint8_t getKey(sf::Event& event)
 {
     if (event.type == sf::Event::KeyPressed)
@@ -148,6 +148,7 @@ void initSprites()
     }
 }
 
+// clear Chip8 display buffer
 void cls()
 {
     memset(&ram[displayOffset], 0x00, 0x100);
@@ -165,29 +166,6 @@ void clearRgbaBuffer()
         rgba32_buffer[offset++] = 0xFF;
     }
 }
-
-// these coordinates are in the screen coordinates (e.g. SFML)
-// draw pixel into RGBA texture
-void drawPixel(std::uint8_t x, std::uint8_t y)
-{
-    std::size_t offset = (y * width * 4) + x * 4;
-    rgba32_buffer[offset] = 0x00;
-    rgba32_buffer[offset] = 0xFF;
-    rgba32_buffer[offset] = 0x00;
-    rgba32_buffer[offset] = 0xFF;
-}
-
-// These coordinates are in CHIP-8 coordinates, and translates to Screen coordinates
-//void drawRect(std::uint8_t x, std::uint8_t y)
-//{
-//    for (std::uint8_t row = 0; row < 10; ++row)
-//    {
-//        for (std::uint8_t col = 0; col < 10; ++col)
-//        {
-//            drawPixel((x * 10) + col, (y * 10) + row);
-//        }
-//    }
-//}
 
 // x,y are in chip 8 display coordinates
 // draw on actual screen. use 10x10 pixels
@@ -469,10 +447,6 @@ int main(int argc, char** argv)
             {
                 log("DRW");
                 draw(registry[x], registry[y], opcode[3]);
-                // DRW
-                //std::ostringstream oss;
-                //oss << "DRW " << std::hex << static_cast<int>(opcode[3]) << " height sprite at (" << static_cast<int>(x) << ", " << static_cast<int>(y) << ")\n";
-                //std::cout << oss.str();
             }
             break;
             case 0xE:
