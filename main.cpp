@@ -26,8 +26,8 @@ std::uint8_t stackSize;
 bool waitingKey = false;
 std::uint8_t keyRegistry;
 
-const unsigned int width = 640;
-const unsigned int height = 320;
+const unsigned int screenWidth = 640;
+const unsigned int screenHeight = 320;
 
 std::unique_ptr<sf::RenderWindow> pWindow;
 std::unique_ptr<sf::Texture> pTexture;
@@ -92,15 +92,10 @@ void draw(std::uint8_t x, std::uint8_t y, std::uint8_t height)
     }
     std::uint16_t addr = getAddr(0);
 
-    std::uint8_t xbyteoffset = x / 8;
-    std::uint8_t bitoffset = x % 8;
-
     for (std::uint8_t row = 0; row < height; ++row)
     {
         std::uint8_t data = ram[addr + row];
-        std::uint8_t remainder = x % 8;
-        std::uint8_t firstByteMask = 0xFF >> remainder;
-        std::uint8_t secondByteMask = -(0x100) >> remainder;
+        int remainder = x % 8;
         std::uint16_t dbyte = ((y + row) * 8) + (x / 8);
         std::uint16_t dOffset = displayOffset + dbyte;
         if (dOffset > 0xFFF)
@@ -125,15 +120,15 @@ std::uint8_t sfKeyToChip8Key(sf::Keyboard::Key k)
 {
     if (k >= sf::Keyboard::Num0 && k <= sf::Keyboard::Num9)
     {
-        return k - sf::Keyboard::Num0;
+        return static_cast<std::uint8_t>(k - sf::Keyboard::Num0);
     }
     if (k >= sf::Keyboard::Numpad0 && k <= sf::Keyboard::Numpad9)
     {
-        return k - sf::Keyboard::Numpad0;
+        return static_cast<std::uint8_t>(k - sf::Keyboard::Numpad0);
     }
     if (k >= sf::Keyboard::A && k <= sf::Keyboard::F)
     {
-        return k + 10;
+        return static_cast<std::uint8_t>(k + 10);
     }
     return 0xFF;
 }
@@ -183,7 +178,7 @@ void cls()
 
 void clearRgbaBuffer()
 {
-    const std::size_t bufSz = width * height * 4;
+    const std::size_t bufSz = screenWidth * screenHeight * 4;
     std::size_t offset = 0x00;
     while (offset < bufSz)
     {
@@ -201,8 +196,8 @@ void drawScreenPixel(std::uint8_t x, std::uint8_t y)
 {
     x = x * 10;
     y = y * 10;
-    const std::size_t stride = width * 4;
-    const std::size_t rasterLength = x + 10 > width ? x + 10 - width : 10;
+    const std::size_t stride = screenWidth * 4;
+    const std::size_t rasterLength = x + 10 > screenWidth ? x + 10 - screenWidth : 10;
     const std::size_t rowOffset = x * 4;
     for (std::uint8_t row = 0; row < 10; ++row)
     {
@@ -262,13 +257,13 @@ int main(int argc, char** argv)
 
     stackOffset = 0xEA0;
 
-    pWindow.reset(new sf::RenderWindow(sf::VideoMode(width, height), "CHIP-8 Interpreter"));
+    pWindow.reset(new sf::RenderWindow(sf::VideoMode(screenWidth, screenHeight), "CHIP-8 Interpreter"));
     pWindow->clear(sf::Color::Black);
     pTexture.reset(new sf::Texture());
-    pTexture->create(width, height);
+    pTexture->create(screenWidth, screenHeight);
     pSprite.reset(new sf::Sprite(*pTexture));
 
-    rgba32_buffer = new sf::Uint8[width * height * 4];
+    rgba32_buffer = new sf::Uint8[screenWidth * screenHeight * 4];
     clearRgbaBuffer();
 
     sf::Clock clock;
@@ -503,7 +498,7 @@ int main(int argc, char** argv)
                 std::random_device randomDevice;
                 std::default_random_engine randomEngine(randomDevice());
                 std::uniform_int_distribution<short> uniformDist(0, 255);
-                uint8_t randomValue = uniformDist(randomEngine);
+                uint8_t randomValue = static_cast<std::uint8_t>(uniformDist(randomEngine));
                 randomValue = randomValue & instruction[1];
                 registry[x] = randomValue;
             }
@@ -608,7 +603,7 @@ int main(int argc, char** argv)
                 {
                     log("LD Vx, [I]");
                     if (x > 0xF) throw std::runtime_error("Invalid parameter");
-                    for (int i = 0; i <= x; ++i)
+                    for (std::uint8_t i = 0; i <= x; ++i)
                     {
                         const std::uint16_t addr = getAddr(i);
                         registry[i] = ram[addr];
