@@ -100,24 +100,39 @@ void draw(std::uint8_t x, std::uint8_t y, std::uint8_t height)
     }
 }
 
+// return sf::Keyboard::Unkown if k not between 0x0 and 0xF
+sf::Keyboard::Key chip8KeyToSfKey(std::uint8_t k)
+{
+    if (k < 9) return static_cast<sf::Keyboard::Key>(k + 26);
+    if (k < 0x10) return static_cast<sf::Keyboard::Key>(k - 10);
+    return sf::Keyboard::Unknown;
+}
+
+// return 0x0-0xF or 0xFF for invalid key
+std::uint8_t sfKeyToChip8Key(sf::Keyboard::Key k)
+{
+    if (k >= sf::Keyboard::Num0 && k <= sf::Keyboard::Num9)
+    {
+        return k - sf::Keyboard::Num0;
+    }
+    if (k >= sf::Keyboard::Numpad0 && k <= sf::Keyboard::Numpad9)
+    {
+        return k - sf::Keyboard::Numpad0;
+    }
+    if (k >= sf::Keyboard::A && k <= sf::Keyboard::F)
+    {
+        return k + 10;
+    }
+    return 0xFF;
+}
+
 // get Chip8 key from key event and return as a value 0-15 "0-F". or 0xFF on invalid key
 std::uint8_t getKey(sf::Event& event)
 {
     if (event.type == sf::Event::KeyPressed)
     {
-        sf::Keyboard::Key k = event.key.code;
-        if (k >= sf::Keyboard::Num0 && k <= sf::Keyboard::Num9)
-        {
-            return k - sf::Keyboard::Num0;
-        }
-        if (k >= sf::Keyboard::Numpad0 && k <= sf::Keyboard::Numpad9)
-        {
-            return k - sf::Keyboard::Numpad0;
-        }
-        if (k >= sf::Keyboard::A && k <= sf::Keyboard::F)
-        {
-            return k + 10;
-        }
+        sf::Keyboard::Key code = event.key.code;
+        return sfKeyToChip8Key(code);
     }
     return 0xFF;
 }
@@ -382,31 +397,42 @@ int main(int argc, char** argv)
                 case 0x4:
                 {
                     log("ADD Vx, Vy");
-                    throw std::runtime_error("Not implemented");
+                    std::uint16_t total = registry[x] + registry[y];
+                    if (total > 0xFF) registry[0xF] = 1;
+                    else  registry[0xF] = 0;
+                    registry[x] += registry[y];
                 }
                 break;
                 case 0x5:
                 {
                     log("SUB Vx, Vy");
-                    throw std::runtime_error("Not implemented");
+                    if (registry[x] > registry[y]) registry[0xF] = 1;
+                    else  registry[0xF] = 0;
+                    registry[x] -= registry[y];
                 }
                 break;
                 case 0x6:
                 {
                     log("SHR Vx {, Vy}");
-                    throw std::runtime_error("Not implemented");
+                    if (registry[x] & 0x01) registry[0xF] = 1;
+                    else  registry[0xF] = 0;
+                    registry[x] = registry[x] >> 1;
                 }
                 break;
                 case 0x7:
                 {
                     log("SUBN Vx, Vy");
-                    throw std::runtime_error("Not implemented");
+                    if (registry[y] > registry[x]) registry[0xF] = 1;
+                    else registry[0xF] = 0;
+                    registry[x] = registry[y] - registry[x];
                 }
                 break;
                 case 0xE:
                 {
                     log("SHL Vx {, Vy}");
-                    throw std::runtime_error("Not implemented");
+                    if (registry[x] & 0x80) registry[0xF] = 1;
+                    else registry[0xF] = 0;
+                    registry[x] = registry[x] << 2;
                 }
                 break;
                 }
@@ -415,7 +441,7 @@ int main(int argc, char** argv)
             case 0x9:
             {
                 log("SNE Vx, Vy");
-                throw std::runtime_error("Not implemented");
+                if (registry[x] != registry[y]) pc += 2;
             }
             break;
             case 0xA:
@@ -429,7 +455,7 @@ int main(int argc, char** argv)
             case 0xB:
             {
                 log("JP V0, addr");
-                throw std::runtime_error("Not implemented");
+                pc = nnn + registry[0];
             }
             break;
             case 0xC:
@@ -456,13 +482,15 @@ int main(int argc, char** argv)
                 case 0x9E:
                 {
                     log("SKP");
-                    throw std::runtime_error("Not implemented");
+                    sf::Keyboard::Key key = chip8KeyToSfKey(registry[x]);
+                    if (sf::Keyboard::isKeyPressed(key)) pc += 2;
                 }
                 break;
                 case 0xA1:
                 {
                     log("SKNP");
-                    throw std::runtime_error("Not implemented");
+                    sf::Keyboard::Key key = chip8KeyToSfKey(registry[x]);
+                    if (key != sf::Keyboard::Unknown && !sf::Keyboard::isKeyPressed(key)) pc += 2;
                 }
                 break;
                 }
@@ -475,7 +503,7 @@ int main(int argc, char** argv)
                 case 0x07:
                 {
                     log("LD Vx, DT");
-                    throw std::runtime_error("Not implemented");
+                    registry[x] = DT;
                 }
                 break;
                 case 0x0A:
@@ -488,19 +516,20 @@ int main(int argc, char** argv)
                 case 0x15:
                 {
                     log("LD DT, Vx");
-                    throw std::runtime_error("Not implemented");
+                    DT = registry[x];
                 }
                 break;
                 case 0x18:
                 {
                     log("LD ST, Vx");
-                    throw std::runtime_error("Not implemented");
+                    ST = registry[x];
                 }
                 break;
                 case 0x1E:
                 {
                     log("ADD I, Vx");
-                    throw std::runtime_error("Not implemented");
+                    std::uint16_t addr = getAddr(registry[x]);
+                    fillI(addr);
                 }
                 break;
                 case 0x29:
@@ -528,12 +557,18 @@ int main(int argc, char** argv)
                 case 0x55:
                 {
                     log("LD [I], Vx");
-                    throw std::runtime_error("Not implemented");
+                    if (x > 0xF) throw std::runtime_error("Invalid parameter");
+                    std::uint16_t addr = getAddr(0);
+                    for (int i = 0; i <= x; ++i, ++addr)
+                    {
+                        ram[addr] = registry[i];
+                    }
                 }
                 break;
                 case 0x65:
                 {
                     log("LD Vx, [I]");
+                    if (x > 0xF) throw std::runtime_error("Invalid parameter");
                     for (int i = 0; i <= x; ++i)
                     {
                         const std::uint16_t addr = getAddr(i);
