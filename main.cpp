@@ -7,7 +7,7 @@
 
 // Memory
 std::uint8_t ram[4096];
-std::uint8_t registry[8];
+std::uint8_t registry[16];
 std::uint8_t I[2];
 std::uint16_t pc;
 std::uint8_t sp;
@@ -20,6 +20,9 @@ std::uint16_t romOffset;
 
 std::uint16_t displayOffset;
 
+std::uint16_t stackOffset;
+std::uint8_t stackSize;
+
 bool waitingKey = false;
 std::uint8_t keyRegistry;
 
@@ -30,6 +33,15 @@ std::unique_ptr<sf::RenderWindow> pWindow;
 std::unique_ptr<sf::Texture> pTexture;
 std::unique_ptr<sf::Sprite> pSprite;
 sf::Uint8* rgba32_buffer;
+
+constexpr bool isBigEndian()
+{
+    union {
+        std::uint16_t v;
+        std::uint8_t b[2];
+    } test = { 0xFF00 };
+    return test.b[0];
+}
 
 void log(const std::string& msg)
 {
@@ -248,6 +260,8 @@ int main(int argc, char** argv)
 
     displayOffset = 0xF00; // display is from 0xF00 to 0xFFF (8 x 4 = 32 bytes). Each bit == pixel
 
+    stackOffset = 0xEA0;
+
     pWindow.reset(new sf::RenderWindow(sf::VideoMode(width, height), "CHIP-8 Interpreter"));
     pWindow->clear(sf::Color::Black);
     pTexture.reset(new sf::Texture());
@@ -256,6 +270,10 @@ int main(int argc, char** argv)
 
     rgba32_buffer = new sf::Uint8[width * height * 4];
     clearRgbaBuffer();
+
+    sf::Clock clock;
+    sf::Time kTimePerFrame = sf::milliseconds(17); // 60 Hertz
+    sf::Time elapsedTimeSinceLastTick = sf::Time::Zero;
 
     while (pWindow->isOpen())
     {
@@ -282,6 +300,14 @@ int main(int argc, char** argv)
                 }
             }
             }
+        }
+
+        elapsedTimeSinceLastTick += clock.restart();
+        if (elapsedTimeSinceLastTick >= kTimePerFrame)
+        {
+            elapsedTimeSinceLastTick -= kTimePerFrame;
+            if (DT > 0) --DT;
+            if (ST > 0) --ST;
         }
 
         if (!waitingKey)
@@ -312,7 +338,13 @@ int main(int argc, char** argv)
                 case 0xEE: // RET
                 {
                     log("RET");
-                    throw std::runtime_error("Not implemented");
+                    if (stackSize == 0) // RCA 1802 stack limit
+                    {
+                        throw std::runtime_error("No function return value");
+                    }
+                    --stackSize;
+                    pc = ram[stackOffset + (stackSize * 2)] << 8;
+                    pc += ram[stackOffset + (stackSize * 2) + 1];
                 }
                 break;
                 }
@@ -333,7 +365,14 @@ int main(int argc, char** argv)
             case 0x2:
             {
                 log("CALL addr");
-                throw std::runtime_error("Not implemented");
+                if (stackSize >= 12) // RCA 180 2 stack limit
+                {
+                    throw std::runtime_error("Stackoverflow");
+                }
+                ram[stackOffset + (stackSize * 2)] = (pc >> 8) & 0x00FF;
+                ram[stackOffset + (stackSize * 2) + 1] = (pc & 0x00FF);
+                ++stackSize;
+                pc = nnn;
             }
             break;
             case 0x3:
