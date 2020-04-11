@@ -267,7 +267,7 @@ int main(int argc, char** argv)
     clearRgbaBuffer();
 
     sf::Clock clock;
-    sf::Time kTimePerFrame = sf::milliseconds(17); // 60 Hertz
+    sf::Time kTimePerFrame = sf::microseconds(16666); // 60 Hertz
     sf::Time elapsedTimeSinceLastTick = sf::Time::Zero;
 
     while (pWindow->isOpen())
@@ -298,7 +298,7 @@ int main(int argc, char** argv)
         }
 
         elapsedTimeSinceLastTick += clock.restart();
-        if (elapsedTimeSinceLastTick >= kTimePerFrame)
+        while (elapsedTimeSinceLastTick >= kTimePerFrame)
         {
             elapsedTimeSinceLastTick -= kTimePerFrame;
             if (DT > 0) --DT;
