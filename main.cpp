@@ -1,3 +1,4 @@
+#include <cstdarg>
 #include <iostream>
 #include <sstream>
 #include <fstream>
@@ -6,7 +7,7 @@
 #include <SFML/Graphics.hpp>
 
 // Memory
-std::uint8_t ram[4096];
+std::uint8_t ram[0x1000];
 std::uint8_t registry[16];
 std::uint8_t I[2];
 std::uint16_t pc;
@@ -46,6 +47,15 @@ constexpr bool isBigEndian()
 void log(const std::string& msg)
 {
     std::cout << msg.c_str() << std::endl;
+}
+
+void trace(char *fmt, ...)
+{
+    va_list vlist;
+    va_start(vlist, fmt);
+    vfprintf(stdout, fmt, vlist);
+    vfprintf(stdout, "\n", vlist);
+    va_end(vlist);
 }
 
 // fill I register with address
@@ -173,7 +183,7 @@ void initSprites()
 // clear Chip8 display buffer
 void cls()
 {
-    memset(&ram[displayOffset], 0x00, 0x100);
+    memset(&ram[0xF00], 0x00, 0x100);
 }
 
 void clearRgbaBuffer()
@@ -192,16 +202,18 @@ void clearRgbaBuffer()
 // x,y are in chip 8 display coordinates
 // draw on actual screen. use 10x10 pixels
 // target screen is 10x chip display size
-void drawScreenPixel(std::uint8_t x, std::uint8_t y)
+void drawScreenPixel(unsigned x, unsigned y)
 {
     x = x * 10;
     y = y * 10;
+    if (x >= screenWidth) throw std::runtime_error("Invalid parameter");
+    if (y >= screenHeight) throw std::runtime_error("Invalid parameter");
     const std::size_t stride = screenWidth * 4;
     const std::size_t rasterLength = x + 10 > screenWidth ? x + 10 - screenWidth : 10;
     const std::size_t rowOffset = x * 4;
     for (std::uint8_t row = 0; row < 10; ++row)
     {
-        std::size_t currentOffset = (y + row) * stride + rowOffset;
+        std::size_t currentOffset = ((y + row) * stride) + rowOffset;
         for (std::uint8_t col = 0; col < rasterLength; ++col)
         {
             rgba32_buffer[currentOffset++] = 0x00;
@@ -221,10 +233,11 @@ void drawScreen()
     {
         for (std::uint8_t chunk = 0; chunk < 8; ++chunk, ++chip8DisplayOffset)
         {
-            std::uint8_t data = ram[chip8DisplayOffset];
+            const std::size_t startingOffset = chunk * 8;
+            const std::uint8_t data = ram[chip8DisplayOffset];
             for (std::uint8_t b = 0; b < 8; ++b)
             {
-                if (data & (0x80 >> b)) drawScreenPixel((chunk * 8) + b, row);
+                if (data & (0x80 >> b)) drawScreenPixel(startingOffset + b, row);
             }
         }
     }
@@ -289,6 +302,7 @@ int main(int argc, char** argv)
                     std::uint8_t k = getKey(event);
                     if (k < 0x10)
                     {
+                        trace("LD Vx, K v=%X K=%X", keyRegistry, k);
                         registry[keyRegistry] = k;
                         waitingKey = false;
                     }
@@ -326,13 +340,13 @@ int main(int argc, char** argv)
                 {
                 case 0xE0: // CLS
                 {
-                    log("CLS");
+                    trace("CLS");
                     cls();
                 }
                 break;
                 case 0xEE: // RET
                 {
-                    log("RET");
+                    trace("RET");
                     if (stackSize == 0) // RCA 1802 stack limit
                     {
                         throw std::runtime_error("No function return value");
@@ -347,7 +361,7 @@ int main(int argc, char** argv)
             break;
             case 0x1:
             {
-                log("JP addr");
+                //trace("JP %X", nnn);
                 if (nnn < romOffset || nnn > 0xFFF)
                 {
                     std::ostringstream oss;
@@ -359,7 +373,8 @@ int main(int argc, char** argv)
             break;
             case 0x2:
             {
-                log("CALL addr");
+                //log("CALL addr");
+                trace("CALL %X", nnn);
                 if (stackSize >= 12) // RCA 180 2 stack limit
                 {
                     throw std::runtime_error("Stackoverflow");
@@ -373,30 +388,35 @@ int main(int argc, char** argv)
             case 0x3:
             {
                 log("SE Vx, byte");
+                trace("SE Vx, byte x=%X byte=%X", x, nn);
                 if (registry[x] == nn) pc += 2;
             }
             break;
             case 0x4:
             {
-                log("SNE Vx, byte");
+                //log("SNE Vx, byte");
+                trace("SNE Vx, byte x=%X byte=%X", x, nn);
                 if (registry[x] != nn) pc += 2;
             }
             break;
             case 0x5:
             {
                 log("SE Vx, Vy");
+                trace("SE Vx, Vy x=%X y=%X", x, y);
                 if (registry[x] == registry[y]) pc += 2;
             }
             break;
             case 0x6:
             {
-                log("LD Vx, byte");
+                //log("LD Vx, byte");
+                trace("LD Vx, byte x=%X byte=%X", x, nn);
                 registry[x] = nn;
             }
             break;
             case 0x7:
             {
-                log("ADD Vx, byte");
+                //log("ADD Vx, byte");
+                trace("ADD Vx, byte x=%X byte=%X", x, nn);
                 registry[x] += nn;
             }
             break;
@@ -406,67 +426,76 @@ int main(int argc, char** argv)
                 {
                 case 0x0:
                 {
-                    log("LD Vx, Vy");
+                    //log("LD Vx, Vy");
+                    trace("LD Vx, Vy x=%X y=%X", x, y);
                     registry[x] = registry[y];
                 }
                 break;
                 case 0x1:
                 {
-                    log("OR Vx, Vy");
+                    //log("OR Vx, Vy");
                     registry[x] |= registry[y];
+                    trace("OR Vx, Vy x=%X y=%X result=%X", x, y, registry[x]);
                 }
                 break;
                 case 0x2:
                 {
-                    log("AND Vx, Vy");
+                    //log("AND Vx, Vy");
                     registry[x] &= registry[y];
+                    trace("AND Vx, Vy x=%X y=%X result=%X", x, y, registry[x]);
                 }
                 break;
                 case 0x3:
                 {
-                    log("XOR Vx, Vy");
+                    //log("XOR Vx, Vy");
                     registry[x] ^= registry[y];
+                    trace("XOR Vx, Vy x=%X y=%X result=%X", x, y, registry[x]);
                 }
                 break;
                 case 0x4:
                 {
-                    log("ADD Vx, Vy");
+                    //log("ADD Vx, Vy");
                     std::uint16_t total = registry[x] + registry[y];
                     if (total > 0xFF) registry[0xF] = 1;
                     else  registry[0xF] = 0;
                     registry[x] += registry[y];
+                    trace("ADD Vx, Vy x=%X y=%X result=%X", x, y, registry[x]);
                 }
                 break;
                 case 0x5:
                 {
-                    log("SUB Vx, Vy");
+                    //log("SUB Vx, Vy");
                     if (registry[x] > registry[y]) registry[0xF] = 1;
                     else  registry[0xF] = 0;
                     registry[x] -= registry[y];
+                    trace("SUB Vx, Vy x=%X y=%X result=%X", x, y, registry[x]);
                 }
                 break;
                 case 0x6:
                 {
-                    log("SHR Vx {, Vy}");
+                    trace("SHR Vx {, Vy}");
                     if (registry[x] & 0x01) registry[0xF] = 1;
                     else  registry[0xF] = 0;
                     registry[x] = registry[x] >> 1;
+                    trace("SHR Vx {, Vy} x=%X result=%X", x, registry[x]);
                 }
                 break;
                 case 0x7:
                 {
-                    log("SUBN Vx, Vy");
+                    //log("SUBN Vx, Vy");
                     if (registry[y] > registry[x]) registry[0xF] = 1;
                     else registry[0xF] = 0;
                     registry[x] = registry[y] - registry[x];
+                    trace("SUBN Vx, Vy x=%X y=%X result=%X", x, y, registry[x]);
                 }
                 break;
                 case 0xE:
                 {
-                    log("SHL Vx {, Vy}");
+                    //log("SHL Vx {, Vy}");
                     if (registry[x] & 0x80) registry[0xF] = 1;
                     else registry[0xF] = 0;
                     registry[x] = registry[x] << 2;
+                    trace("SHL Vx {, Vy} x=%X result=%X", x, registry[x]);
                 }
                 break;
                 }
@@ -474,13 +503,14 @@ int main(int argc, char** argv)
             break;
             case 0x9:
             {
-                log("SNE Vx, Vy");
+                //log("SNE Vx, Vy");
+                trace("SNE Vx, Vy x=%X y=%X Vx=%X Vy=%X", x, y, registry[x], registry[y]);
                 if (registry[x] != registry[y]) pc += 2;
             }
             break;
             case 0xA:
             {
-                log("LD I, addr");
+                trace("LD I, %X", nnn);
                 memset(&I[0], 0x0, 2);
                 memcpy(&I[0], &opcode[1], 1);
                 memcpy(&I[1], &instruction[1], 2);
@@ -488,7 +518,7 @@ int main(int argc, char** argv)
             break;
             case 0xB:
             {
-                log("JP V0, addr");
+                trace("JP V0, %X", nnn);
                 pc = nnn + registry[0];
             }
             break;
@@ -505,7 +535,7 @@ int main(int argc, char** argv)
             break;
             case 0xD:
             {
-                log("DRW");
+                trace("DRW x=%X y=%X Vx=%X Vy=%X height=%X", x, y, registry[x], registry[y], opcode[3]);
                 draw(registry[x], registry[y], opcode[3]);
             }
             break;
@@ -515,14 +545,14 @@ int main(int argc, char** argv)
                 {
                 case 0x9E:
                 {
-                    log("SKP");
+                    trace("SKP Vx x=%X Vx=%X", x, registry[x]);
                     sf::Keyboard::Key key = chip8KeyToSfKey(registry[x]);
                     if (sf::Keyboard::isKeyPressed(key)) pc += 2;
                 }
                 break;
                 case 0xA1:
                 {
-                    log("SKNP");
+                    trace("SKNP Vx x=%X Vx=%X", x, registry[x]);
                     sf::Keyboard::Key key = chip8KeyToSfKey(registry[x]);
                     if (key != sf::Keyboard::Unknown && !sf::Keyboard::isKeyPressed(key)) pc += 2;
                 }
@@ -536,47 +566,48 @@ int main(int argc, char** argv)
                 {
                 case 0x07:
                 {
-                    log("LD Vx, DT");
                     registry[x] = DT;
+                    trace("LD Vx, DT x=%X Vx=%X", x, registry[x]);
                 }
                 break;
                 case 0x0A:
                 {
-                    log("LD Vx, K");
+                    //log("LD Vx, K");
+                    trace("getKey()");
                     waitingKey = true;
                     keyRegistry = x;
                 }
                 break;
                 case 0x15:
                 {
-                    log("LD DT, Vx");
                     DT = registry[x];
+                    trace("LD DT, Vx x=%X DT=%X", x, DT);
                 }
                 break;
                 case 0x18:
                 {
-                    log("LD ST, Vx");
                     ST = registry[x];
+                    trace("LD ST, Vx x=%X ST=%X", x, ST);
                 }
                 break;
                 case 0x1E:
                 {
-                    log("ADD I, Vx");
                     std::uint16_t addr = getAddr(registry[x]);
                     fillI(addr);
+                    trace("ADD I, Vx x=%X I=%X", x, addr);
                 }
                 break;
                 case 0x29:
                 {
-                    log("LD F, Vx");
+                    //log("LD F, Vx");
                     // load address of Font sprite Vx in register I
                     std::uint16_t addr = getSpriteAddr(registry[x]);
                     fillI(addr);
+                    trace("LD F, Vx x=%X F=%X", x, registry[x]);
                 }
                 break;
                 case 0x33:
                 {
-                    log("LD B, Vx");
                     std::uint8_t num = registry[x];
                     const std::uint8_t hundreds = num / 100;
                     num = num % 100;
@@ -586,22 +617,23 @@ int main(int argc, char** argv)
                     ram[i] = hundreds;
                     ram[i + 1] = tens;
                     ram[i + 2] = ones;
+                    trace("LD B, Vx x=%X Vx=%X addr=%X hundreds=%d tens=%d ones=%d", x, registry[x], i, hundreds, tens, ones);
                 }
                 break;
                 case 0x55:
                 {
-                    log("LD [I], Vx");
                     if (x > 0xF) throw std::runtime_error("Invalid parameter");
                     std::uint16_t addr = getAddr(0);
                     for (int i = 0; i <= x; ++i, ++addr)
                     {
                         ram[addr] = registry[i];
                     }
+                    trace("LD [I], Vx x=%X Vx=%X I=%X", x, registry[x], addr);
                 }
                 break;
                 case 0x65:
                 {
-                    log("LD Vx, [I]");
+                    trace("LD Vx, [I]");
                     if (x > 0xF) throw std::runtime_error("Invalid parameter");
                     for (std::uint8_t i = 0; i <= x; ++i)
                     {
@@ -617,7 +649,7 @@ int main(int argc, char** argv)
         }
         drawScreen();
     }
-    std::cout << "done\n";
+    trace("done");
     pTexture.reset();
     pSprite.reset();
     pWindow.reset();
