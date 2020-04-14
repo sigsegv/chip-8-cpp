@@ -33,16 +33,7 @@ const unsigned int screenHeight = 320;
 std::unique_ptr<sf::RenderWindow> pWindow;
 std::unique_ptr<sf::Texture> pTexture;
 std::unique_ptr<sf::Sprite> pSprite;
-sf::Uint8* rgba32_buffer;
-
-constexpr bool isBigEndian()
-{
-    union {
-        std::uint16_t v;
-        std::uint8_t b[2];
-    } test = { 0xFF00 };
-    return test.b[0];
-}
+sf::Uint8* screenBufferRGBA32;
 
 void log(const std::string& msg)
 {
@@ -59,7 +50,7 @@ void trace(char *fmt, ...)
 }
 
 // fill I register with address
-void fillI(std::uint16_t addr)
+void writeToI(std::uint16_t addr)
 {
     I[0] = (addr >> 8) & 0x00FF;
     I[1] = addr & 0x00FF;
@@ -72,7 +63,7 @@ std::uint16_t getAddr(std::uint8_t offset)
 }
 
 // Address of font sprite X
-std::uint16_t getSpriteAddr(std::uint8_t x)
+std::uint16_t getGlyphAddr(std::uint8_t x)
 {
     std::ostringstream oss;
     oss << "Get glyph index " << std::hex << static_cast<int>(x);
@@ -80,6 +71,7 @@ std::uint16_t getSpriteAddr(std::uint8_t x)
     return spriteOffset + (x * 5);
 }
 
+// Update chip8 display buffer by drawing sprite at address I to location x,y.
 void draw(std::uint8_t x, std::uint8_t y, std::uint8_t height)
 {
     if (height > 15)
@@ -175,7 +167,7 @@ std::uint8_t getKey(sf::Event& event)
     return 0xFF;
 }
 
-void initSprites()
+void initBuiltinGlyphs()
 {
     uint8_t data[80] = { 
         0xF0, 0x90, 0x90, 0x90, 0xF0,
@@ -207,16 +199,16 @@ void cls()
     memset(&ram[0xF00], 0x00, 0x100);
 }
 
-void clearRgbaBuffer()
+void clearScreenBuffer()
 {
     const std::size_t bufSz = screenWidth * screenHeight * 4;
     std::size_t offset = 0x00;
     while (offset < bufSz)
     {
-        rgba32_buffer[offset++] = 0x00;
-        rgba32_buffer[offset++] = 0x00;
-        rgba32_buffer[offset++] = 0x00;
-        rgba32_buffer[offset++] = 0xFF;
+        screenBufferRGBA32[offset++] = 0x00;
+        screenBufferRGBA32[offset++] = 0x00;
+        screenBufferRGBA32[offset++] = 0x00;
+        screenBufferRGBA32[offset++] = 0xFF;
     }
 }
 
@@ -237,17 +229,17 @@ void drawScreenPixel(unsigned x, unsigned y)
         std::size_t currentOffset = ((y + row) * stride) + rowOffset;
         for (std::uint8_t col = 0; col < rasterLength; ++col)
         {
-            rgba32_buffer[currentOffset++] = 0x00;
-            rgba32_buffer[currentOffset++] = 0xFF;
-            rgba32_buffer[currentOffset++] = 0x00;
-            rgba32_buffer[currentOffset++] = 0xFF;
+            screenBufferRGBA32[currentOffset++] = 0x00;
+            screenBufferRGBA32[currentOffset++] = 0xFF;
+            screenBufferRGBA32[currentOffset++] = 0x00;
+            screenBufferRGBA32[currentOffset++] = 0xFF;
         }
     }
 }
 
 void drawScreen()
 {
-    clearRgbaBuffer();
+    clearScreenBuffer();
 
     std::uint16_t chip8DisplayOffset = displayOffset;
     for (std::uint8_t row = 0; row < 32; ++row)
@@ -263,7 +255,7 @@ void drawScreen()
         }
     }
 
-    pTexture->update(rgba32_buffer);
+    pTexture->update(screenBufferRGBA32);
     pWindow->draw(*pSprite);
     pWindow->display();
 }
@@ -281,7 +273,7 @@ int main(int argc, char** argv)
     std::cout << "Read " << bytesRead << " bytes from " << argv[1] << std::endl;
 
     spriteOffset = 0x78; // beginning of hardcoded font sprites
-    initSprites();
+    initBuiltinGlyphs();
 
     romOffset = 0x200;
     pc = romOffset;
@@ -297,8 +289,8 @@ int main(int argc, char** argv)
     pTexture->create(screenWidth, screenHeight);
     pSprite.reset(new sf::Sprite(*pTexture));
 
-    rgba32_buffer = new sf::Uint8[screenWidth * screenHeight * 4];
-    clearRgbaBuffer();
+    screenBufferRGBA32 = new sf::Uint8[screenWidth * screenHeight * 4];
+    clearScreenBuffer();
 
     sf::Clock clock;
     sf::Time kTimePerFrame = sf::microseconds(16666); // 60 Hertz
@@ -614,7 +606,7 @@ int main(int argc, char** argv)
                 case 0x1E:
                 {
                     std::uint16_t addr = getAddr(registry[x]);
-                    fillI(addr);
+                    writeToI(addr);
                     trace("ADD I, Vx x=%X I=%X", x, addr);
                 }
                 break;
@@ -622,8 +614,8 @@ int main(int argc, char** argv)
                 {
                     //log("LD F, Vx");
                     // load address of Font sprite Vx in register I
-                    std::uint16_t addr = getSpriteAddr(registry[x]);
-                    fillI(addr);
+                    std::uint16_t addr = getGlyphAddr(registry[x]);
+                    writeToI(addr);
                     trace("LD F, Vx x=%X F=%X", x, registry[x]);
                 }
                 break;
