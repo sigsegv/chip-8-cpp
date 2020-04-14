@@ -102,18 +102,39 @@ void draw(std::uint8_t x, std::uint8_t y, std::uint8_t height)
     }
     std::uint16_t addr = getAddr(0);
 
-    for (std::uint8_t row = 0; row < height; ++row)
+    for (std::uint8_t row = 0; row < height && y + row < 32; ++row)
     {
-        std::uint8_t data = ram[addr + row];
-        int remainder = x % 8;
-        std::uint16_t dbyte = ((y + row) * 8) + (x / 8);
-        std::uint16_t dOffset = displayOffset + dbyte;
-        if (dOffset > 0xFFF)
+        const std::uint8_t spriteByte = ram[addr + row];
+        const std::uint8_t remainder = x % 8;
+        const std::uint8_t firstSpriteByte = spriteByte >> remainder;
+        const std::uint8_t secondSpriteByte = spriteByte << (8 - remainder);
+
+        const std::uint16_t firstOffset = ((y + row) * 8) + (x / 8) + displayOffset;
+        std::uint16_t secondOffset = firstOffset + 1;
+        if (x > 55)
+        {
+            // wrap to beginning of row
+            secondOffset = (y + row) * 8;
+        }
+
+        if (firstOffset > 0xFFF)
         {
             throw std::runtime_error("access violation in drawing command");
         }
-        ram[dOffset] ^= (data >> remainder);
-        if(dOffset < 0xFFF) ram[dOffset + 1] ^= (data << (8 - remainder));
+        registry[0xF] = 0x00;
+        std::uint8_t testData = ram[firstOffset] & (0xFF >> remainder);
+        if (testData & firstSpriteByte) registry[0xF] = 0x01;
+        ram[firstOffset] ^= firstSpriteByte;
+        
+        if (secondOffset < 0xFFF)
+        {
+            if (registry[0xF] == 0x0)
+            {
+                testData = ram[secondOffset] & (0xFF << (8 - remainder));
+                if (testData & secondSpriteByte) registry[0xF] = 0x01;
+            }
+            ram[secondOffset] ^= secondSpriteByte;
+        }
     }
 }
 
