@@ -80,18 +80,8 @@ void draw(std::uint8_t x, std::uint8_t y, std::uint8_t height)
         oss << "Invalid sprite height of " << static_cast<int>(height);
         throw std::runtime_error(oss.str());
     }
-    if (x > 63)
-    {
-        std::ostringstream oss;
-        oss << "Invalid sprite dx of " << static_cast<int>(x);
-        throw std::runtime_error(oss.str());
-    }
-    if (y > 31)
-    {
-        std::ostringstream oss;
-        oss << "Invalid sprite dy of " << static_cast<int>(y);
-        throw std::runtime_error(oss.str());
-    }
+    x = x % 64;
+    y = y % 32;
     std::uint16_t addr = getAddr(0);
 
     for (std::uint8_t row = 0; row < height && y + row < 32; ++row)
